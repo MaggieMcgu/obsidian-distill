@@ -100,15 +100,16 @@ function getRandomNote(
 
   // If includeOrphans, weight toward notes with fewer backlinks
   if (settings.includeOrphans) {
-    pool.sort((a, b) => {
-      const aLinks = Object.keys(
-        (app.metadataCache as any).resolvedLinks[a.path] || {}
-      ).length;
-      const bLinks = Object.keys(
-        (app.metadataCache as any).resolvedLinks[b.path] || {}
-      ).length;
-      return aLinks - bLinks;
-    });
+    // Connections = links out + links in, so a note nobody points to
+    // still counts as lonely even if it links out.
+    const resolved = (app.metadataCache as any).resolvedLinks as Record<string, Record<string, number>>;
+    const degree = new Map<string, number>();
+    for (const [from, targets] of Object.entries(resolved)) {
+      const outs = Object.keys(targets);
+      degree.set(from, (degree.get(from) || 0) + outs.length);
+      for (const to of outs) degree.set(to, (degree.get(to) || 0) + 1);
+    }
+    pool.sort((a, b) => (degree.get(a.path) || 0) - (degree.get(b.path) || 0));
     const halfPool = pool.slice(0, Math.max(1, Math.ceil(pool.length * 0.5)));
     return halfPool[Math.floor(Math.random() * halfPool.length)];
   }
@@ -590,8 +591,9 @@ export default class FlintPlugin extends Plugin {
     this.addSettingTab(new FlintSettingTab(this.app, this));
   }
 
-  async openSpark() {
-    const noteA = getRandomNote([], this.app, this.settings);
+  /** Open Flint. Pass a note to strike it against a random (lonely) note. */
+  async openSpark(preselected?: TFile) {
+    const noteA = preselected ?? getRandomNote([], this.app, this.settings);
     const noteB = getRandomNote(
       noteA ? [noteA.path] : [],
       this.app,
@@ -666,14 +668,13 @@ export default class FlintPlugin extends Plugin {
       return;
     }
 
-    // Frontmatter makes sparks a queryable corpus (Dataview: type = "spark").
-    // Opt-in via settings so it never silently changes note output.
-    const lines: string[] = [];
-    if (this.settings.tagSparks) {
-      const now = new Date();
-      const created = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-      lines.push("---", "type: spark", `created: ${created}`, "tags: [flint]", "---", "");
-    }
+    // A spark is your own assertion, so it's a `claim` in the 2nd Brain's
+    // closed type set; `origin: flint` keeps sparks findable as a group.
+    const now = new Date();
+    const created = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const lines: string[] = ["---", "type: claim", "origin: flint", `created: ${created}`];
+    if (this.settings.tagSparks) lines.push("tags: [flint]");
+    lines.push("---", "");
     lines.push(
       idea.trim(),
       "",
@@ -859,7 +860,7 @@ class FlintSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Tag spark notes")
       .setDesc(
-        "Add YAML frontmatter (type: spark, created, tags: [flint]) to each new spark, so your sparks are a queryable Dataview corpus. Off by default."
+        "Also add tags: [flint] to each new spark. (Sparks always get type: claim and origin: flint.)"
       )
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.tagSparks);

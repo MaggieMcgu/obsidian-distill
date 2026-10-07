@@ -70,15 +70,15 @@ function getRandomNote(exclude, app, settings, differentFolderFrom) {
   if (pool.length === 0)
     return null;
   if (settings.includeOrphans) {
-    pool.sort((a, b) => {
-      const aLinks = Object.keys(
-        app.metadataCache.resolvedLinks[a.path] || {}
-      ).length;
-      const bLinks = Object.keys(
-        app.metadataCache.resolvedLinks[b.path] || {}
-      ).length;
-      return aLinks - bLinks;
-    });
+    const resolved = app.metadataCache.resolvedLinks;
+    const degree = /* @__PURE__ */ new Map();
+    for (const [from, targets] of Object.entries(resolved)) {
+      const outs = Object.keys(targets);
+      degree.set(from, (degree.get(from) || 0) + outs.length);
+      for (const to of outs)
+        degree.set(to, (degree.get(to) || 0) + 1);
+    }
+    pool.sort((a, b) => (degree.get(a.path) || 0) - (degree.get(b.path) || 0));
     const halfPool = pool.slice(0, Math.max(1, Math.ceil(pool.length * 0.5)));
     return halfPool[Math.floor(Math.random() * halfPool.length)];
   }
@@ -453,9 +453,10 @@ var FlintPlugin = class extends import_obsidian.Plugin {
     });
     this.addSettingTab(new FlintSettingTab(this.app, this));
   }
-  async openSpark() {
+  /** Open Flint. Pass a note to strike it against a random (lonely) note. */
+  async openSpark(preselected) {
     var _a;
-    const noteA = getRandomNote([], this.app, this.settings);
+    const noteA = preselected != null ? preselected : getRandomNote([], this.app, this.settings);
     const noteB = getRandomNote(
       noteA ? [noteA.path] : [],
       this.app,
@@ -516,12 +517,12 @@ var FlintPlugin = class extends import_obsidian.Plugin {
       new import_obsidian.Notice(`File "${targetPath}" already exists`);
       return;
     }
-    const lines = [];
-    if (this.settings.tagSparks) {
-      const now = new Date();
-      const created = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-      lines.push("---", "type: spark", `created: ${created}`, "tags: [flint]", "---", "");
-    }
+    const now = new Date();
+    const created = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const lines = ["---", "type: claim", "origin: flint", `created: ${created}`];
+    if (this.settings.tagSparks)
+      lines.push("tags: [flint]");
+    lines.push("---", "");
     lines.push(
       idea.trim(),
       "",
@@ -664,7 +665,7 @@ var FlintSettingTab = class extends import_obsidian.PluginSettingTab {
       });
     });
     new import_obsidian.Setting(containerEl).setName("Tag spark notes").setDesc(
-      "Add YAML frontmatter (type: spark, created, tags: [flint]) to each new spark, so your sparks are a queryable Dataview corpus. Off by default."
+      "Also add tags: [flint] to each new spark. (Sparks always get type: claim and origin: flint.)"
     ).addToggle((toggle) => {
       toggle.setValue(this.plugin.settings.tagSparks);
       toggle.onChange(async (val) => {
