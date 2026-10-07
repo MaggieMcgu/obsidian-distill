@@ -34,12 +34,12 @@ export function noteMetadata(app: App, file: TFile, content: string): SourceMeta
     if (url) meta.url = url[1].trim();
   }
 
-  const fm = app.metadataCache.getFileCache(file)?.frontmatter;
+  const fm: Record<string, unknown> | undefined = app.metadataCache.getFileCache(file)?.frontmatter;
   if (fm) {
     const fmAuthor = fm.author ?? fm.Author;
-    if (!meta.author && fmAuthor) meta.author = String(fmAuthor).replace(/\[\[|\]\]/g, "");
-    if (!meta.title && fm.title) meta.title = String(fm.title);
-    if (!meta.url && fm.url) meta.url = String(fm.url);
+    if (!meta.author && typeof fmAuthor === "string") meta.author = fmAuthor.replace(/\[\[|\]\]/g, "");
+    if (!meta.title && typeof fm.title === "string") meta.title = fm.title;
+    if (!meta.url && typeof fm.url === "string") meta.url = fm.url;
   }
   return meta;
 }
@@ -126,7 +126,8 @@ export function readPdfSelection(app: App): PdfSelection | null {
     const sel = window.getSelection();
     const raw = sel?.toString() ?? "";
     if (!sel || !raw.trim() || !sel.anchorNode) return null;
-    const node = sel.anchorNode instanceof Element ? sel.anchorNode : sel.anchorNode.parentElement;
+    const anchor = sel.anchorNode;
+    const node = anchor.instanceOf(Element) ? anchor : anchor.parentElement;
     const pageEl = node?.closest(".page[data-page-number]") as HTMLElement | null;
     if (!pageEl) return null;
 
@@ -235,10 +236,6 @@ export class DistillModal extends Modal {
       attr: { rows: Platform.isPhone ? "3" : "4", placeholder: "What does this mean to you? In your words." },
     });
     if (this.input.prefillIdea) idea.value = this.input.prefillIdea;
-    idea.addEventListener("input", () => {
-      idea.style.height = "auto";
-      idea.style.height = Math.min(idea.scrollHeight, window.innerHeight * 0.3) + "px";
-    });
 
     const title = body.createEl("input", {
       type: "text",
@@ -271,7 +268,7 @@ export class DistillModal extends Modal {
     }
 
     const saveAs = row.createEl("select", { cls: "dropdown fd-saveas" });
-    saveAs.createEl("option", { text: "As a Thought", value: "thought" });
+    saveAs.createEl("option", { text: "As its own note", value: "thought" });
     if (this.input.canSaveToSource) {
       saveAs.createEl("option", { text: "As a note on the source", value: "source" });
       saveAs.value = this.input.defaultSaveAs;
@@ -293,7 +290,7 @@ export class DistillModal extends Modal {
     const relLine = relRow.createEl("input", {
       type: "text",
       cls: "fd-rel-line",
-      attr: { placeholder: "how? (one line)" },
+      attr: { placeholder: "How do they relate?" },
     });
     relRow.toggle(false);
     connectBtn.addEventListener("click", (e) => {

@@ -129,7 +129,7 @@ function getRandomNote(
   if (settings.includeOrphans) {
     // Connections = links out + links in, so a note nobody points to
     // still counts as lonely even if it links out.
-    const resolved = (app.metadataCache as any).resolvedLinks as Record<string, Record<string, number>>;
+    const resolved = app.metadataCache.resolvedLinks;
     const degree = new Map<string, number>();
     for (const [from, targets] of Object.entries(resolved)) {
       const outs = Object.keys(targets);
@@ -149,11 +149,12 @@ async function getCairnProjects(app: App): Promise<CairnProject[]> {
   const dataPath = `${app.vault.configDir}/plugins/note-assembler/data.json`;
   try {
     if (!(await app.vault.adapter.exists(dataPath))) return [];
-    const data = JSON.parse(await app.vault.adapter.read(dataPath));
+    const data = JSON.parse(await app.vault.adapter.read(dataPath)) as {
+      projects?: (CairnProject & { archived?: boolean })[];
+    };
     // Only live essays: not archived, and the essay file still exists.
-    return (data.projects || []).filter(
-      (p: CairnProject & { archived?: boolean }) =>
-        !p.archived && app.vault.getAbstractFileByPath(p.filePath) instanceof TFile
+    return (data.projects ?? []).filter(
+      (p) => !p.archived && app.vault.getAbstractFileByPath(p.filePath) instanceof TFile
     );
   } catch {
     return [];
@@ -267,12 +268,12 @@ class SparkModal extends Modal {
     // Header
     const header = contentEl.createDiv({ cls: "fk-header" });
     header.createEl("h3", { text: "Strike" });
-    header.createEl("span", { cls: "fk-header-tagline", text: "Two notes, one new idea" });
+    header.createSpan({ cls: "fk-header-tagline", text: "Two notes, one new idea" });
 
     // Folder config row (compact, single line)
     const allFolders: string[] = [];
     this.app.vault.getAllLoadedFiles().forEach((f) => {
-      if ((f as TFolder).children !== undefined && f.path !== "/") {
+      if (f instanceof TFolder && f.path !== "/") {
         allFolders.push(f.path);
       }
     });
@@ -281,21 +282,21 @@ class SparkModal extends Modal {
     const configRow = contentEl.createDiv({ cls: "fk-config-row" });
 
     const sourceGroup = configRow.createDiv({ cls: "fk-config-group" });
-    sourceGroup.createEl("span", { cls: "fk-config-label", text: "from" });
+    sourceGroup.createSpan({ cls: "fk-config-label", text: "From" });
     const sourceSelect = sourceGroup.createEl("select", { cls: "fk-config-select" });
     sourceSelect.createEl("option", { text: "All folders", value: "" });
     for (const folder of allFolders) {
       const opt = sourceSelect.createEl("option", { text: folder, value: folder });
       if (folder === this.settings.sourceFolder) opt.selected = true;
     }
-    sourceSelect.addEventListener("change", async () => {
+    sourceSelect.addEventListener("change", () => {
       this.settings.sourceFolder = sourceSelect.value;
       this.onSettingsChange();
-      await this.shuffleBoth();
+      this.shuffleBoth();
     });
 
     const outputGroup = configRow.createDiv({ cls: "fk-config-group" });
-    outputGroup.createEl("span", { cls: "fk-config-label", text: "to" });
+    outputGroup.createSpan({ cls: "fk-config-label", text: "To" });
     const outputSelect = outputGroup.createEl("select", { cls: "fk-config-select" });
     outputSelect.createEl("option", { text: "Vault root", value: "" });
     for (const folder of allFolders) {
@@ -339,7 +340,7 @@ class SparkModal extends Modal {
 
     // Title input with auto-suggest
     const titleRow = writing.createDiv({ cls: "fk-title-row" });
-    titleRow.createEl("span", { cls: "fk-title-label", text: "Title:" });
+    titleRow.createSpan({ cls: "fk-title-label", text: "Title:" });
     const titleInput = titleRow.createEl("input", {
       type: "text",
       cls: "fk-title-input",
@@ -401,7 +402,7 @@ class SparkModal extends Modal {
 
     const saveBtn = btnRow.createEl("button", {
       cls: "mod-cta",
-      text: "Save Spark",
+      text: "Save spark",
     });
 
     const submit = async () => {
@@ -428,17 +429,17 @@ class SparkModal extends Modal {
       projectCheckboxes.forEach((cb) => { cb.checked = false; });
     };
 
-    saveBtn.addEventListener("click", submit);
+    saveBtn.addEventListener("click", () => void submit());
 
     textarea.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        submit();
+        void submit();
       }
     });
 
     // Focus textarea
-    setTimeout(() => textarea.focus(), 50);
+    window.setTimeout(() => textarea.focus(), 50);
   }
 
   private buildPanel(
@@ -451,7 +452,7 @@ class SparkModal extends Modal {
     const titleEl = panel.createDiv({ cls: "fk-panel-title" });
     titleEl.addEventListener("click", () => {
       const file = side === "A" ? this.noteA : this.noteB;
-      this.app.workspace.openLinkText(file.path, "", true);
+      void this.app.workspace.openLinkText(file.path, "", true);
     });
 
     const folderEl = panel.createDiv({ cls: "fk-panel-folder" });
@@ -505,7 +506,7 @@ class SparkModal extends Modal {
     modal.titleEl.setText("Place as which card?");
     const row = modal.contentEl.createDiv({ cls: "fk-slot-choice" });
     const place = (side: "A" | "B") => {
-      this.replaceNote(side, file);
+      void this.replaceNote(side, file);
       modal.close();
     };
     const btnA = row.createEl("button", {
@@ -549,7 +550,7 @@ class SparkModal extends Modal {
         return;
       }
       this.seenPaths.add(retry.path);
-      this.app.vault.read(retry).then((content) => {
+      void this.app.vault.read(retry).then((content) => {
         if (side === "A") { this.noteA = retry; this.contentA = content; }
         else { this.noteB = retry; this.contentB = content; }
         this.renderPanel(side);
@@ -558,7 +559,7 @@ class SparkModal extends Modal {
       return;
     }
     this.seenPaths.add(newNote.path);
-    this.app.vault.read(newNote).then((content) => {
+    void this.app.vault.read(newNote).then((content) => {
       if (side === "A") {
         this.noteA = newNote;
         this.contentA = content;
@@ -578,7 +579,7 @@ class SparkModal extends Modal {
     const newB = this.onShuffle([newA.path], newA.parent?.path);
     if (!newB) return;
 
-    Promise.all([
+    void Promise.all([
       this.app.vault.read(newA),
       this.app.vault.read(newB),
     ]).then(([cA, cB]) => {
@@ -591,7 +592,7 @@ class SparkModal extends Modal {
       this.rotatePrompt();
       if (textarea) textarea.value = "";
       if (titleInput) titleInput.value = "";
-      if (textarea) setTimeout(() => textarea.focus(), 50);
+      if (textarea) window.setTimeout(() => textarea.focus(), 50);
     });
   }
 
@@ -609,8 +610,8 @@ export default class DistillPlugin extends Plugin {
   async onload() {
     await this.loadSettings();
 
-    this.addRibbonIcon("flame", "Distill — Strike two notes together", () => {
-      this.openSpark();
+    this.addRibbonIcon("flame", "Strike two notes together", () => {
+      void this.openSpark();
     });
 
     this.addCommand({
@@ -623,12 +624,12 @@ export default class DistillPlugin extends Plugin {
 
     // ── Distill ──
     this.addRibbonIcon("sparkles", "Distill selection to a note", () => {
-      if (!this.distillFromAnywhere()) new Notice("Select a passage first, then Distill");
+      if (!this.distillFromAnywhere()) new Notice("Select a passage first, then distill it");
     });
 
     this.addCommand({
-      id: "distill-selection",
-      name: "Distill selection to a note",
+      id: "selection-to-note",
+      name: "Turn selection into a note",
       checkCallback: (checking) => {
         const view = this.app.workspace.getActiveViewOfType(MarkdownView);
         const hasEditorSel = !!view?.editor.getSelection().trim();
@@ -640,11 +641,11 @@ export default class DistillPlugin extends Plugin {
 
     this.addCommand({
       id: "promote-to-thought",
-      name: "Promote this source note to a Thought",
+      name: "Promote source note to its own note",
       editorCheckCallback: (checking, editor, view) => {
         const found = this.sourceNoteAtCursor(editor);
         if (!found || !view.file) return false;
-        if (!checking) this.promoteToThought(editor, view.file, found);
+        if (!checking) void this.promoteToThought(editor, view.file, found);
         return true;
       },
     });
@@ -665,16 +666,16 @@ export default class DistillPlugin extends Plugin {
             item
               .setTitle("Distill to a note")
               .setIcon("sparkles")
-              .onClick(() => this.distillFromEditor(editor, file))
+              .onClick(() => void this.distillFromEditor(editor, file))
           );
         }
         const found = this.sourceNoteAtCursor(editor);
         if (found) {
           menu.addItem((item) =>
             item
-              .setTitle("Promote to Thought")
+              .setTitle("Promote to its own note")
               .setIcon("arrow-up-right")
-              .onClick(() => this.promoteToThought(editor, file, found))
+              .onClick(() => void this.promoteToThought(editor, file, found))
           );
         }
       })
@@ -699,12 +700,12 @@ export default class DistillPlugin extends Plugin {
   distillFromAnywhere(): boolean {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (view?.file && view.editor.getSelection().trim()) {
-      this.distillFromEditor(view.editor, view.file);
+      void this.distillFromEditor(view.editor, view.file);
       return true;
     }
     const pdf = this.currentPdfSelection();
     if (pdf) {
-      this.openDistill({ quote: pdf.text, source: pdf.file, pdf });
+      void this.openDistill({ quote: pdf.text, source: pdf.file, pdf });
       return true;
     }
     return false;
@@ -765,7 +766,7 @@ export default class DistillPlugin extends Plugin {
         prefillIdea: opts.prefillIdea,
       },
       (onChoose) => new NotePickerModal(this.app, this.settings.distillFolder || this.settings.sourceFolder, onChoose).open(),
-      async (result) => {
+      (result) => void (async () => {
         this.lastPdfSelection = null; // a used selection must not come back on the next click
         if (result.saveAs === "source") {
           await this.saveSourceNote(result, quote, refLink, source, sourceNote);
@@ -776,7 +777,7 @@ export default class DistillPlugin extends Plugin {
           );
           if (file) opts.onSaved?.(file);
         }
-      }
+      })()
     ).open();
   }
 
@@ -836,7 +837,7 @@ export default class DistillPlugin extends Plugin {
     this.settings.strikeAfterDistill = r.strike;
     await this.saveSettings();
     new Notice(`Created "${name}"`);
-    if (r.strike) this.openSpark(file);
+    if (r.strike) void this.openSpark(file);
     return file;
   }
 
@@ -910,7 +911,10 @@ export default class DistillPlugin extends Plugin {
     const dataPath = `${this.app.vault.configDir}/plugins/note-assembler/data.json`;
     try {
       if (await this.app.vault.adapter.exists(dataPath)) {
-        const old = JSON.parse(await this.app.vault.adapter.read(dataPath))?.settings ?? {};
+        const old =
+          (JSON.parse(await this.app.vault.adapter.read(dataPath)) as {
+            settings?: { distillDefaultFolder?: string; addBacklinkToSource?: boolean; strikeAfterDistill?: boolean };
+          }).settings ?? {};
         if (old.distillDefaultFolder) this.settings.distillFolder = old.distillDefaultFolder;
         if (typeof old.addBacklinkToSource === "boolean") this.settings.distillBacklinkToSource = old.addBacklinkToSource;
         if (typeof old.strikeAfterDistill === "boolean") this.settings.strikeAfterDistill = old.strikeAfterDistill;
@@ -972,7 +976,7 @@ export default class DistillPlugin extends Plugin {
         ).open();
       },
       // onSettingsChange
-      () => { this.saveSettings(); }
+      () => { void this.saveSettings(); }
     );
     this.activeModal = modal;
     modal.open();
@@ -1034,18 +1038,14 @@ export default class DistillPlugin extends Plugin {
       }
     }
 
-    const frag = document.createDocumentFragment();
+    const frag = createFragment();
     frag.append("Sparked ");
-    const link = document.createElement("a");
-    link.textContent = safeName;
-    link.style.cursor = "pointer";
-    link.style.textDecoration = "underline";
+    const link = frag.createEl("a", { cls: "fk-notice-link", text: safeName });
     link.addEventListener("click", () => {
       if (this.activeModal) this.activeModal.close();
       const f = this.app.vault.getAbstractFileByPath(targetPath);
-      if (f instanceof TFile) this.app.workspace.getLeaf(false).openFile(f);
+      if (f instanceof TFile) void this.app.workspace.getLeaf(false).openFile(f);
     });
-    frag.append(link);
     new Notice(frag, 8000);
   }
 
@@ -1100,17 +1100,17 @@ export default class DistillPlugin extends Plugin {
     if (this.settings.sparkHistory.length > 200) {
       this.settings.sparkHistory = this.settings.sparkHistory.slice(-200);
     }
-    this.saveSettings();
+    void this.saveSettings();
   }
 
   async loadSettings() {
-    let saved = await this.loadData();
+    let saved = (await this.loadData()) as Partial<DistillSettings> | null;
     if (!saved) {
       // First run under the "distill" id: carry over settings + spark history from "flint".
       const oldPath = `${this.app.vault.configDir}/plugins/flint/data.json`;
       try {
         if (await this.app.vault.adapter.exists(oldPath)) {
-          saved = JSON.parse(await this.app.vault.adapter.read(oldPath));
+          saved = JSON.parse(await this.app.vault.adapter.read(oldPath)) as Partial<DistillSettings>;
         }
       } catch {
         // No old data; start fresh.
@@ -1138,8 +1138,47 @@ class DistillSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    // Source folder
     const folders = this.getFolders();
+
+    // Distill (general, no heading)
+    new Setting(containerEl)
+      .setName("Distilled notes folder")
+      .setDesc("Where new distilled notes are saved.")
+      .addDropdown((drop) => {
+        drop.addOption("", "Vault root");
+        for (const f of folders) drop.addOption(f, f);
+        drop.setValue(this.plugin.settings.distillFolder);
+        drop.onChange(async (val) => {
+          this.plugin.settings.distillFolder = val;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Save distilled passages as")
+      .setDesc("The default when you distill a passage. You can switch it each time.")
+      .addDropdown((drop) => {
+        drop.addOption("thought", "Their own note");
+        drop.addOption("source", "A note on the source");
+        drop.setValue(this.plugin.settings.distillSaveAs);
+        drop.onChange(async (val) => {
+          this.plugin.settings.distillSaveAs = val === "source" ? "source" : "thought";
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Link new notes from their source")
+      .setDesc("Add a link to each new note in the note it came from.")
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.distillBacklinkToSource);
+        toggle.onChange(async (val) => {
+          this.plugin.settings.distillBacklinkToSource = val;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl).setName("Strike").setHeading();
 
     new Setting(containerEl)
       .setName("Source folder")
@@ -1218,7 +1257,7 @@ class DistillSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Show essay projects")
       .setDesc(
-        "Show Cairn essay project checkboxes when saving a spark. Disable if you don't use Cairn."
+        "Show checkboxes for your essays (from the companion essay plugin) when saving a note. Turn off if you don't use it."
       )
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.showEssayProjects);
@@ -1233,26 +1272,18 @@ class DistillSettingTab extends PluginSettingTab {
     if (history.length > 0) {
       const sparked = history.filter((e) => e.result === "sparked").length;
       const skipped = history.filter((e) => e.result === "skipped").length;
-      containerEl.createEl("hr");
-      const statsDiv = containerEl.createDiv({ cls: "fk-stats" });
-      statsDiv.createEl("h4", { text: "Spark history" });
-      statsDiv.createEl("p", {
-        text: `${sparked} sparked, ${skipped} skipped (${history.length} total)`,
-      });
+      new Setting(containerEl)
+        .setName("Strike history")
+        .setDesc(`${sparked} sparked, ${skipped} skipped (${history.length} total)`);
     }
 
-    // About
-    containerEl.createEl("hr");
-    const about = containerEl.createDiv({ cls: "fk-about" });
-    about.createEl("p", {
-      text: "Distill is free and open source. Built by Maggie McGuire.",
-    });
+    new Setting(containerEl).setDesc("Free and open source.");
   }
 
   private getFolders(): string[] {
     const folders: string[] = [];
     this.app.vault.getAllLoadedFiles().forEach((f) => {
-      if ((f as TFolder).children !== undefined && f.path !== "/") {
+      if (f instanceof TFolder && f.path !== "/") {
         folders.push(f.path);
       }
     });

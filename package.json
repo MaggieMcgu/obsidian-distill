@@ -1,7 +1,7 @@
 {
   "name": "distill",
   "version": "0.3.0",
-  "description": "A Zettelkasten companion: distill what you read into atomic notes in your own words, link them on purpose, and strike notes together for new ideas.",
+  "description": "Distill what you read into atomic notes in your own words, link them on purpose, and strike two notes together for new ideas.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
@@ -9,7 +9,6 @@
   },
   "devDependencies": {
     "@types/node": "^16.11.6",
-    "builtin-modules": "^3.3.0",
     "esbuild": "0.17.3",
     "obsidian": "latest",
     "typescript": "4.7.4",

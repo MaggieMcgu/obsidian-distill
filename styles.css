@@ -439,6 +439,8 @@
 
 .fd-idea {
   resize: vertical;
+  field-sizing: content; /* grows as you type */
+  max-height: 30vh;
   min-height: 3.5em;
   font-size: var(--font-ui-medium);
   line-height: 1.45;
@@ -582,4 +584,9 @@
 }
 .is-phone .fk-btn-row button {
   flex: 1 1 auto;
+}
+
+.fk-notice-link {
+  cursor: pointer;
+  text-decoration: underline;
 }

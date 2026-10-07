@@ -19,11 +19,11 @@ This is basically the first thing I've ever coded. It's simple and it's fun and 
 ![The Distill window: the passage pinned at the top, your idea and title below](distill-screenshot.png)
 
 1. **Select a passage** in any note (Readwise highlights, web clippings, PDF++ quotes) or right inside a PDF
-2. **Distill it** with the ✨ ribbon icon, the right-click menu, or the command `Distill: Distill selection to a note`
+2. **Distill it** with the ✨ ribbon icon, the right-click menu, or the command `Distill: Turn selection into a note`
 3. **Write what it means to you.** The passage stays pinned at the top while you write
 4. **Pick a type** (claim, concept, quote, anecdote) and give it a title, ideally your idea as one full sentence
 5. **Connect it on purpose** with "Connects to…": pick the note this one continues, contradicts or refines, and say how in a line. Both notes get linked
-6. **Save** as its own note, or **as a note on the source** if it's not a full idea yet. Notes on a source can be promoted later: right-click the line → **Promote to Thought**
+6. **Save** as its own note, or **as a note on the source** if it's not a full idea yet. Notes on a source can be promoted later: right-click the line → **Promote to its own note**
 
 Distilled notes keep the quote, the source, the author and a link back to the exact spot (a Readwise highlight or the PDF page). Tick "Then strike it" and the Strike window opens with your new note paired against a lonely one.
 

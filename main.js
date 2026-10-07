@@ -54,12 +54,12 @@ function noteMetadata(app, file, content) {
   const fm = (_a = app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter;
   if (fm) {
     const fmAuthor = (_b = fm.author) != null ? _b : fm.Author;
-    if (!meta.author && fmAuthor)
-      meta.author = String(fmAuthor).replace(/\[\[|\]\]/g, "");
-    if (!meta.title && fm.title)
-      meta.title = String(fm.title);
-    if (!meta.url && fm.url)
-      meta.url = String(fm.url);
+    if (!meta.author && typeof fmAuthor === "string")
+      meta.author = fmAuthor.replace(/\[\[|\]\]/g, "");
+    if (!meta.title && typeof fm.title === "string")
+      meta.title = fm.title;
+    if (!meta.url && typeof fm.url === "string")
+      meta.url = fm.url;
   }
   return meta;
 }
@@ -111,7 +111,8 @@ function readPdfSelection(app) {
     const raw = (_a = sel == null ? void 0 : sel.toString()) != null ? _a : "";
     if (!sel || !raw.trim() || !sel.anchorNode)
       return null;
-    const node = sel.anchorNode instanceof Element ? sel.anchorNode : sel.anchorNode.parentElement;
+    const anchor = sel.anchorNode;
+    const node = anchor.instanceOf(Element) ? anchor : anchor.parentElement;
     const pageEl = node == null ? void 0 : node.closest(".page[data-page-number]");
     if (!pageEl)
       return null;
@@ -181,10 +182,6 @@ var DistillModal = class extends import_obsidian.Modal {
     });
     if (this.input.prefillIdea)
       idea.value = this.input.prefillIdea;
-    idea.addEventListener("input", () => {
-      idea.style.height = "auto";
-      idea.style.height = Math.min(idea.scrollHeight, window.innerHeight * 0.3) + "px";
-    });
     const title = body.createEl("input", {
       type: "text",
       cls: "fd-title",
@@ -215,7 +212,7 @@ var DistillModal = class extends import_obsidian.Modal {
       type.createEl("option", { text: label, value });
     }
     const saveAs = row.createEl("select", { cls: "dropdown fd-saveas" });
-    saveAs.createEl("option", { text: "As a Thought", value: "thought" });
+    saveAs.createEl("option", { text: "As its own note", value: "thought" });
     if (this.input.canSaveToSource) {
       saveAs.createEl("option", { text: "As a note on the source", value: "source" });
       saveAs.value = this.input.defaultSaveAs;
@@ -236,7 +233,7 @@ var DistillModal = class extends import_obsidian.Modal {
     const relLine = relRow.createEl("input", {
       type: "text",
       cls: "fd-rel-line",
-      attr: { placeholder: "how? (one line)" }
+      attr: { placeholder: "How do they relate?" }
     });
     relRow.toggle(false);
     connectBtn.addEventListener("click", (e) => {
@@ -406,12 +403,13 @@ function getRandomNote(exclude, app, settings, differentFolderFrom) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 async function getCairnProjects(app) {
+  var _a;
   const dataPath = `${app.vault.configDir}/plugins/note-assembler/data.json`;
   try {
     if (!await app.vault.adapter.exists(dataPath))
       return [];
     const data = JSON.parse(await app.vault.adapter.read(dataPath));
-    return (data.projects || []).filter(
+    return ((_a = data.projects) != null ? _a : []).filter(
       (p) => !p.archived && app.vault.getAbstractFileByPath(p.filePath) instanceof import_obsidian2.TFile
     );
   } catch (e) {
@@ -463,17 +461,17 @@ var SparkModal = class extends import_obsidian2.Modal {
     modalEl.addClass("fk-spark-modal-container");
     const header = contentEl.createDiv({ cls: "fk-header" });
     header.createEl("h3", { text: "Strike" });
-    header.createEl("span", { cls: "fk-header-tagline", text: "Two notes, one new idea" });
+    header.createSpan({ cls: "fk-header-tagline", text: "Two notes, one new idea" });
     const allFolders = [];
     this.app.vault.getAllLoadedFiles().forEach((f) => {
-      if (f.children !== void 0 && f.path !== "/") {
+      if (f instanceof import_obsidian2.TFolder && f.path !== "/") {
         allFolders.push(f.path);
       }
     });
     allFolders.sort();
     const configRow = contentEl.createDiv({ cls: "fk-config-row" });
     const sourceGroup = configRow.createDiv({ cls: "fk-config-group" });
-    sourceGroup.createEl("span", { cls: "fk-config-label", text: "from" });
+    sourceGroup.createSpan({ cls: "fk-config-label", text: "From" });
     const sourceSelect = sourceGroup.createEl("select", { cls: "fk-config-select" });
     sourceSelect.createEl("option", { text: "All folders", value: "" });
     for (const folder of allFolders) {
@@ -481,13 +479,13 @@ var SparkModal = class extends import_obsidian2.Modal {
       if (folder === this.settings.sourceFolder)
         opt.selected = true;
     }
-    sourceSelect.addEventListener("change", async () => {
+    sourceSelect.addEventListener("change", () => {
       this.settings.sourceFolder = sourceSelect.value;
       this.onSettingsChange();
-      await this.shuffleBoth();
+      this.shuffleBoth();
     });
     const outputGroup = configRow.createDiv({ cls: "fk-config-group" });
-    outputGroup.createEl("span", { cls: "fk-config-label", text: "to" });
+    outputGroup.createSpan({ cls: "fk-config-label", text: "To" });
     const outputSelect = outputGroup.createEl("select", { cls: "fk-config-select" });
     outputSelect.createEl("option", { text: "Vault root", value: "" });
     for (const folder of allFolders) {
@@ -523,7 +521,7 @@ var SparkModal = class extends import_obsidian2.Modal {
       placeholder: "The spark goes here\u2026"
     });
     const titleRow = writing.createDiv({ cls: "fk-title-row" });
-    titleRow.createEl("span", { cls: "fk-title-label", text: "Title:" });
+    titleRow.createSpan({ cls: "fk-title-label", text: "Title:" });
     const titleInput = titleRow.createEl("input", {
       type: "text",
       cls: "fk-title-input",
@@ -576,7 +574,7 @@ var SparkModal = class extends import_obsidian2.Modal {
     });
     const saveBtn = btnRow.createEl("button", {
       cls: "mod-cta",
-      text: "Save Spark"
+      text: "Save spark"
     });
     const submit = async () => {
       const idea = textarea.value.trim();
@@ -603,14 +601,14 @@ var SparkModal = class extends import_obsidian2.Modal {
         cb.checked = false;
       });
     };
-    saveBtn.addEventListener("click", submit);
+    saveBtn.addEventListener("click", () => void submit());
     textarea.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        submit();
+        void submit();
       }
     });
-    setTimeout(() => textarea.focus(), 50);
+    window.setTimeout(() => textarea.focus(), 50);
   }
   buildPanel(parent, side) {
     const panel = parent.createDiv({ cls: "fk-panel" });
@@ -618,7 +616,7 @@ var SparkModal = class extends import_obsidian2.Modal {
     const titleEl = panel.createDiv({ cls: "fk-panel-title" });
     titleEl.addEventListener("click", () => {
       const file = side === "A" ? this.noteA : this.noteB;
-      this.app.workspace.openLinkText(file.path, "", true);
+      void this.app.workspace.openLinkText(file.path, "", true);
     });
     const folderEl = panel.createDiv({ cls: "fk-panel-folder" });
     const contentEl = panel.createDiv({ cls: "fk-panel-content" });
@@ -662,7 +660,7 @@ var SparkModal = class extends import_obsidian2.Modal {
     modal.titleEl.setText("Place as which card?");
     const row = modal.contentEl.createDiv({ cls: "fk-slot-choice" });
     const place = (side) => {
-      this.replaceNote(side, file);
+      void this.replaceNote(side, file);
       modal.close();
     };
     const btnA = row.createEl("button", {
@@ -703,7 +701,7 @@ var SparkModal = class extends import_obsidian2.Modal {
         return;
       }
       this.seenPaths.add(retry.path);
-      this.app.vault.read(retry).then((content) => {
+      void this.app.vault.read(retry).then((content) => {
         if (side === "A") {
           this.noteA = retry;
           this.contentA = content;
@@ -717,7 +715,7 @@ var SparkModal = class extends import_obsidian2.Modal {
       return;
     }
     this.seenPaths.add(newNote.path);
-    this.app.vault.read(newNote).then((content) => {
+    void this.app.vault.read(newNote).then((content) => {
       if (side === "A") {
         this.noteA = newNote;
         this.contentA = content;
@@ -738,7 +736,7 @@ var SparkModal = class extends import_obsidian2.Modal {
     const newB = this.onShuffle([newA.path], (_a = newA.parent) == null ? void 0 : _a.path);
     if (!newB)
       return;
-    Promise.all([
+    void Promise.all([
       this.app.vault.read(newA),
       this.app.vault.read(newB)
     ]).then(([cA, cB]) => {
@@ -754,7 +752,7 @@ var SparkModal = class extends import_obsidian2.Modal {
       if (titleInput)
         titleInput.value = "";
       if (textarea)
-        setTimeout(() => textarea.focus(), 50);
+        window.setTimeout(() => textarea.focus(), 50);
     });
   }
   onClose() {
@@ -769,8 +767,8 @@ var DistillPlugin = class extends import_obsidian2.Plugin {
   }
   async onload() {
     await this.loadSettings();
-    this.addRibbonIcon("flame", "Distill \u2014 Strike two notes together", () => {
-      this.openSpark();
+    this.addRibbonIcon("flame", "Strike two notes together", () => {
+      void this.openSpark();
     });
     this.addCommand({
       id: "open-spark",
@@ -780,11 +778,11 @@ var DistillPlugin = class extends import_obsidian2.Plugin {
     this.addSettingTab(new DistillSettingTab(this.app, this));
     this.addRibbonIcon("sparkles", "Distill selection to a note", () => {
       if (!this.distillFromAnywhere())
-        new import_obsidian2.Notice("Select a passage first, then Distill");
+        new import_obsidian2.Notice("Select a passage first, then distill it");
     });
     this.addCommand({
-      id: "distill-selection",
-      name: "Distill selection to a note",
+      id: "selection-to-note",
+      name: "Turn selection into a note",
       checkCallback: (checking) => {
         const view = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
         const hasEditorSel = !!(view == null ? void 0 : view.editor.getSelection().trim());
@@ -797,13 +795,13 @@ var DistillPlugin = class extends import_obsidian2.Plugin {
     });
     this.addCommand({
       id: "promote-to-thought",
-      name: "Promote this source note to a Thought",
+      name: "Promote source note to its own note",
       editorCheckCallback: (checking, editor, view) => {
         const found = this.sourceNoteAtCursor(editor);
         if (!found || !view.file)
           return false;
         if (!checking)
-          this.promoteToThought(editor, view.file, found);
+          void this.promoteToThought(editor, view.file, found);
         return true;
       }
     });
@@ -819,13 +817,13 @@ var DistillPlugin = class extends import_obsidian2.Plugin {
         const file = view.file;
         if (editor.getSelection().trim()) {
           menu.addItem(
-            (item) => item.setTitle("Distill to a note").setIcon("sparkles").onClick(() => this.distillFromEditor(editor, file))
+            (item) => item.setTitle("Distill to a note").setIcon("sparkles").onClick(() => void this.distillFromEditor(editor, file))
           );
         }
         const found = this.sourceNoteAtCursor(editor);
         if (found) {
           menu.addItem(
-            (item) => item.setTitle("Promote to Thought").setIcon("arrow-up-right").onClick(() => this.promoteToThought(editor, file, found))
+            (item) => item.setTitle("Promote to its own note").setIcon("arrow-up-right").onClick(() => void this.promoteToThought(editor, file, found))
           );
         }
       })
@@ -845,12 +843,12 @@ var DistillPlugin = class extends import_obsidian2.Plugin {
   distillFromAnywhere() {
     const view = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
     if ((view == null ? void 0 : view.file) && view.editor.getSelection().trim()) {
-      this.distillFromEditor(view.editor, view.file);
+      void this.distillFromEditor(view.editor, view.file);
       return true;
     }
     const pdf = this.currentPdfSelection();
     if (pdf) {
-      this.openDistill({ quote: pdf.text, source: pdf.file, pdf });
+      void this.openDistill({ quote: pdf.text, source: pdf.file, pdf });
       return true;
     }
     return false;
@@ -899,7 +897,7 @@ var DistillPlugin = class extends import_obsidian2.Plugin {
         prefillIdea: opts.prefillIdea
       },
       (onChoose) => new NotePickerModal(this.app, this.settings.distillFolder || this.settings.sourceFolder, onChoose).open(),
-      async (result) => {
+      (result) => void (async () => {
         var _a;
         this.lastPdfSelection = null;
         if (result.saveAs === "source") {
@@ -918,7 +916,7 @@ var DistillPlugin = class extends import_obsidian2.Plugin {
           if (file)
             (_a = opts.onSaved) == null ? void 0 : _a.call(opts, file);
         }
-      }
+      })()
     ).open();
   }
   async saveThought(r, quote, refLink, author, source, backlinkTo, projects, sourceNote = backlinkTo) {
@@ -970,7 +968,7 @@ var DistillPlugin = class extends import_obsidian2.Plugin {
     await this.saveSettings();
     new import_obsidian2.Notice(`Created "${name}"`);
     if (r.strike)
-      this.openSpark(file);
+      void this.openSpark(file);
     return file;
   }
   /** The literature-note stage: a short own-words note kept on the source. */
@@ -1034,11 +1032,11 @@ var DistillPlugin = class extends import_obsidian2.Plugin {
   }
   /** One-time: carry Distill settings over from Cairn/Throughline. */
   async migrateDistillSettings() {
-    var _a, _b;
+    var _a;
     const dataPath = `${this.app.vault.configDir}/plugins/note-assembler/data.json`;
     try {
       if (await this.app.vault.adapter.exists(dataPath)) {
-        const old = (_b = (_a = JSON.parse(await this.app.vault.adapter.read(dataPath))) == null ? void 0 : _a.settings) != null ? _b : {};
+        const old = (_a = JSON.parse(await this.app.vault.adapter.read(dataPath)).settings) != null ? _a : {};
         if (old.distillDefaultFolder)
           this.settings.distillFolder = old.distillDefaultFolder;
         if (typeof old.addBacklinkToSource === "boolean")
@@ -1098,7 +1096,7 @@ var DistillPlugin = class extends import_obsidian2.Plugin {
       },
       // onSettingsChange
       () => {
-        this.saveSettings();
+        void this.saveSettings();
       }
     );
     this.activeModal = modal;
@@ -1145,20 +1143,16 @@ var DistillPlugin = class extends import_obsidian2.Plugin {
         }
       }
     }
-    const frag = document.createDocumentFragment();
+    const frag = createFragment();
     frag.append("Sparked ");
-    const link = document.createElement("a");
-    link.textContent = safeName;
-    link.style.cursor = "pointer";
-    link.style.textDecoration = "underline";
+    const link = frag.createEl("a", { cls: "fk-notice-link", text: safeName });
     link.addEventListener("click", () => {
       if (this.activeModal)
         this.activeModal.close();
       const f = this.app.vault.getAbstractFileByPath(targetPath);
       if (f instanceof import_obsidian2.TFile)
-        this.app.workspace.getLeaf(false).openFile(f);
+        void this.app.workspace.getLeaf(false).openFile(f);
     });
-    frag.append(link);
     new import_obsidian2.Notice(frag, 8e3);
   }
   async addToEssay(sparkFile, project) {
@@ -1204,7 +1198,7 @@ ${quoted}
     if (this.settings.sparkHistory.length > 200) {
       this.settings.sparkHistory = this.settings.sparkHistory.slice(-200);
     }
-    this.saveSettings();
+    void this.saveSettings();
   }
   async loadSettings() {
     let saved = await this.loadData();
@@ -1232,6 +1226,33 @@ var DistillSettingTab = class extends import_obsidian2.PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     const folders = this.getFolders();
+    new import_obsidian2.Setting(containerEl).setName("Distilled notes folder").setDesc("Where new distilled notes are saved.").addDropdown((drop) => {
+      drop.addOption("", "Vault root");
+      for (const f of folders)
+        drop.addOption(f, f);
+      drop.setValue(this.plugin.settings.distillFolder);
+      drop.onChange(async (val) => {
+        this.plugin.settings.distillFolder = val;
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian2.Setting(containerEl).setName("Save distilled passages as").setDesc("The default when you distill a passage. You can switch it each time.").addDropdown((drop) => {
+      drop.addOption("thought", "Their own note");
+      drop.addOption("source", "A note on the source");
+      drop.setValue(this.plugin.settings.distillSaveAs);
+      drop.onChange(async (val) => {
+        this.plugin.settings.distillSaveAs = val === "source" ? "source" : "thought";
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian2.Setting(containerEl).setName("Link new notes from their source").setDesc("Add a link to each new note in the note it came from.").addToggle((toggle) => {
+      toggle.setValue(this.plugin.settings.distillBacklinkToSource);
+      toggle.onChange(async (val) => {
+        this.plugin.settings.distillBacklinkToSource = val;
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian2.Setting(containerEl).setName("Strike").setHeading();
     new import_obsidian2.Setting(containerEl).setName("Source folder").setDesc("Which notes to draw from when shuffling. Leave blank for all folders.").addDropdown((drop) => {
       drop.addOption("", "All folders");
       for (const f of folders) {
@@ -1282,7 +1303,7 @@ var DistillSettingTab = class extends import_obsidian2.PluginSettingTab {
       });
     });
     new import_obsidian2.Setting(containerEl).setName("Show essay projects").setDesc(
-      "Show Cairn essay project checkboxes when saving a spark. Disable if you don't use Cairn."
+      "Show checkboxes for your essays (from the companion essay plugin) when saving a note. Turn off if you don't use it."
     ).addToggle((toggle) => {
       toggle.setValue(this.plugin.settings.showEssayProjects);
       toggle.onChange(async (val) => {
@@ -1294,23 +1315,14 @@ var DistillSettingTab = class extends import_obsidian2.PluginSettingTab {
     if (history.length > 0) {
       const sparked = history.filter((e) => e.result === "sparked").length;
       const skipped = history.filter((e) => e.result === "skipped").length;
-      containerEl.createEl("hr");
-      const statsDiv = containerEl.createDiv({ cls: "fk-stats" });
-      statsDiv.createEl("h4", { text: "Spark history" });
-      statsDiv.createEl("p", {
-        text: `${sparked} sparked, ${skipped} skipped (${history.length} total)`
-      });
+      new import_obsidian2.Setting(containerEl).setName("Strike history").setDesc(`${sparked} sparked, ${skipped} skipped (${history.length} total)`);
     }
-    containerEl.createEl("hr");
-    const about = containerEl.createDiv({ cls: "fk-about" });
-    about.createEl("p", {
-      text: "Distill is free and open source. Built by Maggie McGuire."
-    });
+    new import_obsidian2.Setting(containerEl).setDesc("Free and open source.");
   }
   getFolders() {
     const folders = [];
     this.app.vault.getAllLoadedFiles().forEach((f) => {
-      if (f.children !== void 0 && f.path !== "/") {
+      if (f instanceof import_obsidian2.TFolder && f.path !== "/") {
         folders.push(f.path);
       }
     });
