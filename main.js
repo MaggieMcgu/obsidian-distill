@@ -24,7 +24,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/main.ts
 var main_exports = {};
 __export(main_exports, {
-  default: () => FlintPlugin
+  default: () => DistillPlugin
 });
 module.exports = __toCommonJS(main_exports);
 var import_obsidian2 = require("obsidian");
@@ -462,8 +462,8 @@ var SparkModal = class extends import_obsidian2.Modal {
     contentEl.addClass("fk-spark-modal");
     modalEl.addClass("fk-spark-modal-container");
     const header = contentEl.createDiv({ cls: "fk-header" });
-    header.createEl("h3", { text: "Flint" });
-    header.createEl("span", { cls: "fk-header-tagline", text: "Strike two ideas together" });
+    header.createEl("h3", { text: "Strike" });
+    header.createEl("span", { cls: "fk-header-tagline", text: "Two notes, one new idea" });
     const allFolders = [];
     this.app.vault.getAllLoadedFiles().forEach((f) => {
       if (f.children !== void 0 && f.path !== "/") {
@@ -761,7 +761,7 @@ var SparkModal = class extends import_obsidian2.Modal {
     this.contentEl.empty();
   }
 };
-var FlintPlugin = class extends import_obsidian2.Plugin {
+var DistillPlugin = class extends import_obsidian2.Plugin {
   constructor() {
     super(...arguments);
     // ── Distill ───────────────────────────────────────────────
@@ -769,7 +769,7 @@ var FlintPlugin = class extends import_obsidian2.Plugin {
   }
   async onload() {
     await this.loadSettings();
-    this.addRibbonIcon("flame", "Flint \u2014 Strike two notes together", () => {
+    this.addRibbonIcon("flame", "Distill \u2014 Strike two notes together", () => {
       this.openSpark();
     });
     this.addCommand({
@@ -777,8 +777,8 @@ var FlintPlugin = class extends import_obsidian2.Plugin {
       name: "Strike two notes",
       callback: () => this.openSpark()
     });
-    this.addSettingTab(new FlintSettingTab(this.app, this));
-    this.addRibbonIcon("sparkles", "Flint \u2014 Distill selection to a note", () => {
+    this.addSettingTab(new DistillSettingTab(this.app, this));
+    this.addRibbonIcon("sparkles", "Distill selection to a note", () => {
       if (!this.distillFromAnywhere())
         new import_obsidian2.Notice("Select a passage first, then Distill");
     });
@@ -1051,7 +1051,7 @@ var FlintPlugin = class extends import_obsidian2.Plugin {
     this.settings.distillMigrated = true;
     await this.saveSettings();
   }
-  /** Open Flint. Pass a note to strike it against a random (lonely) note. */
+  /** Open the Strike window. Pass a note to strike it against a random (lonely) note. */
   async openSpark(preselected) {
     var _a;
     const noteA = preselected != null ? preselected : getRandomNote([], this.app, this.settings);
@@ -1117,9 +1117,9 @@ var FlintPlugin = class extends import_obsidian2.Plugin {
     }
     const now = new Date();
     const created = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const lines = ["---", "type: claim", "origin: flint", `created: ${created}`];
+    const lines = ["---", "type: claim", "origin: strike", `created: ${created}`];
     if (this.settings.tagSparks)
-      lines.push("tags: [flint]");
+      lines.push("tags: [strike]");
     lines.push("---", "");
     lines.push(
       idea.trim(),
@@ -1207,14 +1207,23 @@ ${quoted}
     this.saveSettings();
   }
   async loadSettings() {
-    const saved = await this.loadData();
+    let saved = await this.loadData();
+    if (!saved) {
+      const oldPath = `${this.app.vault.configDir}/plugins/flint/data.json`;
+      try {
+        if (await this.app.vault.adapter.exists(oldPath)) {
+          saved = JSON.parse(await this.app.vault.adapter.read(oldPath));
+        }
+      } catch (e) {
+      }
+    }
     this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
   }
   async saveSettings() {
     await this.saveData(this.settings);
   }
 };
-var FlintSettingTab = class extends import_obsidian2.PluginSettingTab {
+var DistillSettingTab = class extends import_obsidian2.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -1264,7 +1273,7 @@ var FlintSettingTab = class extends import_obsidian2.PluginSettingTab {
       });
     });
     new import_obsidian2.Setting(containerEl).setName("Tag spark notes").setDesc(
-      "Also add tags: [flint] to each new spark. (Sparks always get type: claim and origin: flint.)"
+      "Also add tags: [strike] to each new spark. (Sparks always get type: claim and origin: strike.)"
     ).addToggle((toggle) => {
       toggle.setValue(this.plugin.settings.tagSparks);
       toggle.onChange(async (val) => {
@@ -1295,7 +1304,7 @@ var FlintSettingTab = class extends import_obsidian2.PluginSettingTab {
     containerEl.createEl("hr");
     const about = containerEl.createDiv({ cls: "fk-about" });
     about.createEl("p", {
-      text: "Flint is free and open source. Built by Maggie McGuire."
+      text: "Distill is free and open source. Built by Maggie McGuire."
     });
   }
   getFolders() {

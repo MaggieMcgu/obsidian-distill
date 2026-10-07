@@ -1,9 +1,9 @@
 {
-  "id": "flint",
-  "name": "Flint",
-  "version": "0.2.0",
+  "id": "distill",
+  "name": "Distill",
+  "version": "0.3.0",
   "minAppVersion": "1.7.2",
-  "description": "A Zettelkasten companion: distill sources into atomic notes, link them on purpose, and spark new ideas from collisions.",
+  "description": "A Zettelkasten companion: distill what you read into atomic notes in your own words, link them on purpose, and strike notes together for new ideas.",
   "author": "Maggie McGuire",
   "authorUrl": "https://moabsunnews.com",
   "fundingUrl": "https://venmo.com/KiKiBouba",

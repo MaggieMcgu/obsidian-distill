@@ -37,7 +37,7 @@ interface SparkEntry {
   timestamp: number;
 }
 
-interface FlintSettings {
+interface DistillSettings {
   sourceFolder: string;
   outputFolder: string;
   includeOrphans: boolean;
@@ -72,7 +72,7 @@ interface CairnProject {
   sourceFolder: string;
 }
 
-const DEFAULT_SETTINGS: FlintSettings = {
+const DEFAULT_SETTINGS: DistillSettings = {
   sourceFolder: "",
   outputFolder: "",
   includeOrphans: true,
@@ -96,7 +96,7 @@ function sanitizeFilename(name: string): string {
 function getRandomNote(
   exclude: string[],
   app: App,
-  settings: FlintSettings,
+  settings: DistillSettings,
   differentFolderFrom?: string
 ): TFile | null {
   let pool = app.vault.getMarkdownFiles();
@@ -198,7 +198,7 @@ class SparkModal extends Modal {
   noteB: TFile;
   contentA: string;
   contentB: string;
-  settings: FlintSettings;
+  settings: DistillSettings;
   cairnProjects: CairnProject[];
   onSpark: (
     idea: string,
@@ -230,7 +230,7 @@ class SparkModal extends Modal {
     noteB: TFile,
     contentA: string,
     contentB: string,
-    settings: FlintSettings,
+    settings: DistillSettings,
     cairnProjects: CairnProject[],
     onSpark: (
       idea: string,
@@ -266,8 +266,8 @@ class SparkModal extends Modal {
 
     // Header
     const header = contentEl.createDiv({ cls: "fk-header" });
-    header.createEl("h3", { text: "Flint" });
-    header.createEl("span", { cls: "fk-header-tagline", text: "Strike two ideas together" });
+    header.createEl("h3", { text: "Strike" });
+    header.createEl("span", { cls: "fk-header-tagline", text: "Two notes, one new idea" });
 
     // Folder config row (compact, single line)
     const allFolders: string[] = [];
@@ -602,14 +602,14 @@ class SparkModal extends Modal {
 
 // ── Plugin ──────────────────────────────────────────────────
 
-export default class FlintPlugin extends Plugin {
-  settings!: FlintSettings;
+export default class DistillPlugin extends Plugin {
+  settings!: DistillSettings;
   activeModal?: SparkModal;
 
   async onload() {
     await this.loadSettings();
 
-    this.addRibbonIcon("flame", "Flint — Strike two notes together", () => {
+    this.addRibbonIcon("flame", "Distill — Strike two notes together", () => {
       this.openSpark();
     });
 
@@ -619,10 +619,10 @@ export default class FlintPlugin extends Plugin {
       callback: () => this.openSpark(),
     });
 
-    this.addSettingTab(new FlintSettingTab(this.app, this));
+    this.addSettingTab(new DistillSettingTab(this.app, this));
 
     // ── Distill ──
-    this.addRibbonIcon("sparkles", "Flint — Distill selection to a note", () => {
+    this.addRibbonIcon("sparkles", "Distill selection to a note", () => {
       if (!this.distillFromAnywhere()) new Notice("Select a passage first, then Distill");
     });
 
@@ -922,7 +922,7 @@ export default class FlintPlugin extends Plugin {
     await this.saveSettings();
   }
 
-  /** Open Flint. Pass a note to strike it against a random (lonely) note. */
+  /** Open the Strike window. Pass a note to strike it against a random (lonely) note. */
   async openSpark(preselected?: TFile) {
     const noteA = preselected ?? getRandomNote([], this.app, this.settings);
     const noteB = getRandomNote(
@@ -1000,11 +1000,11 @@ export default class FlintPlugin extends Plugin {
     }
 
     // A spark is your own assertion, so it's a `claim` in the 2nd Brain's
-    // closed type set; `origin: flint` keeps sparks findable as a group.
+    // closed type set; `origin: strike` keeps sparks findable as a group.
     const now = new Date();
     const created = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const lines: string[] = ["---", "type: claim", "origin: flint", `created: ${created}`];
-    if (this.settings.tagSparks) lines.push("tags: [flint]");
+    const lines: string[] = ["---", "type: claim", "origin: strike", `created: ${created}`];
+    if (this.settings.tagSparks) lines.push("tags: [strike]");
     lines.push("---", "");
     lines.push(
       idea.trim(),
@@ -1104,7 +1104,18 @@ export default class FlintPlugin extends Plugin {
   }
 
   async loadSettings() {
-    const saved = await this.loadData();
+    let saved = await this.loadData();
+    if (!saved) {
+      // First run under the "distill" id: carry over settings + spark history from "flint".
+      const oldPath = `${this.app.vault.configDir}/plugins/flint/data.json`;
+      try {
+        if (await this.app.vault.adapter.exists(oldPath)) {
+          saved = JSON.parse(await this.app.vault.adapter.read(oldPath));
+        }
+      } catch {
+        // No old data; start fresh.
+      }
+    }
     this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
   }
 
@@ -1115,10 +1126,10 @@ export default class FlintPlugin extends Plugin {
 
 // ── Settings Tab ────────────────────────────────────────────
 
-class FlintSettingTab extends PluginSettingTab {
-  plugin: FlintPlugin;
+class DistillSettingTab extends PluginSettingTab {
+  plugin: DistillPlugin;
 
-  constructor(app: App, plugin: FlintPlugin) {
+  constructor(app: App, plugin: DistillPlugin) {
     super(app, plugin);
     this.plugin = plugin;
   }
@@ -1193,7 +1204,7 @@ class FlintSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Tag spark notes")
       .setDesc(
-        "Also add tags: [flint] to each new spark. (Sparks always get type: claim and origin: flint.)"
+        "Also add tags: [strike] to each new spark. (Sparks always get type: claim and origin: strike.)"
       )
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.tagSparks);
@@ -1234,7 +1245,7 @@ class FlintSettingTab extends PluginSettingTab {
     containerEl.createEl("hr");
     const about = containerEl.createDiv({ cls: "fk-about" });
     about.createEl("p", {
-      text: "Flint is free and open source. Built by Maggie McGuire.",
+      text: "Distill is free and open source. Built by Maggie McGuire.",
     });
   }
 

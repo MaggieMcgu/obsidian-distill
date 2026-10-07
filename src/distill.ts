@@ -1,6 +1,6 @@
 // ── Distill: turn a passage you read into a note in your own words ──
 //
-// Moved here from Cairn (2026-10) so Flint is the one "make ideas" tool:
+// Moved here from Cairn (2026-10) so one plugin makes ideas:
 // Distill (source → your idea) and Strike (idea × idea → new idea).
 // Works on a selection in a markdown note (Readwise, PDF++ highlights,
 // clippings) or directly inside Obsidian's PDF viewer.

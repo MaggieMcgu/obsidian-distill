@@ -1,8 +1,8 @@
 #!/bin/bash
-# Deploy Flint to Obsidian vault for testing
+# Deploy Distill to Obsidian vault for testing
 
 VAULT="${VAULT:-/Users/maggiemcguire/Library/Mobile Documents/iCloud~md~obsidian/Documents/2nd Brain}"
-PLUGIN_DIR="$VAULT/.obsidian/plugins/flint"
+PLUGIN_DIR="$VAULT/.obsidian/plugins/distill"
 
 mkdir -p "$PLUGIN_DIR"
 cp main.js manifest.json styles.css "$PLUGIN_DIR/"

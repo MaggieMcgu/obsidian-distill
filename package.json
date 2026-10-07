@@ -1,7 +1,7 @@
 {
-  "name": "flint",
-  "version": "0.2.0",
-  "description": "Strike two notes together to spark a third \u2014 random juxtaposition for idea generation",
+  "name": "distill",
+  "version": "0.3.0",
+  "description": "A Zettelkasten companion: distill what you read into atomic notes in your own words, link them on purpose, and strike notes together for new ideas.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
