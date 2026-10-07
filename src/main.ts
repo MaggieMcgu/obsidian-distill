@@ -1,7 +1,10 @@
 import {
   App,
   debounce,
+  Editor,
   FuzzySuggestModal,
+  MarkdownView,
+  Menu,
   Modal,
   Notice,
   Plugin,
@@ -10,6 +13,19 @@ import {
   TFile,
   TFolder,
 } from "obsidian";
+import {
+  DistillModal,
+  DistillResult,
+  INVERSE,
+  PdfSelection,
+  SaveAs,
+  appendUnderHeading,
+  cleanEditorSelection,
+  findCompanionNote,
+  findMatchingHighlight,
+  noteMetadata,
+  readPdfSelection,
+} from "./distill";
 
 // ── Data Model ──────────────────────────────────────────────
 
@@ -29,6 +45,12 @@ interface FlintSettings {
   tagSparks: boolean;
   showEssayProjects: boolean;
   sparkHistory: SparkEntry[];
+  // Distill
+  distillFolder: string;
+  distillSaveAs: SaveAs;
+  distillBacklinkToSource: boolean;
+  strikeAfterDistill: boolean;
+  distillMigrated: boolean;
 }
 
 // Rotating provocations — the prompt above the writing area changes with
@@ -57,6 +79,11 @@ const DEFAULT_SETTINGS: FlintSettings = {
   crossFolder: false,
   tagSparks: false,
   showEssayProjects: true,
+  distillFolder: "",
+  distillSaveAs: "thought",
+  distillBacklinkToSource: true,
+  strikeAfterDistill: true,
+  distillMigrated: false,
   sparkHistory: [],
 };
 
@@ -117,14 +144,17 @@ function getRandomNote(
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+/** Essay projects from Throughline (formerly Cairn), if it's installed. */
 async function getCairnProjects(app: App): Promise<CairnProject[]> {
-  const dataPath = ".obsidian/plugins/note-assembler/data.json";
-  const file = app.vault.getAbstractFileByPath(dataPath);
-  if (!file || !(file instanceof TFile)) return [];
+  const dataPath = `${app.vault.configDir}/plugins/note-assembler/data.json`;
   try {
-    const raw = await app.vault.read(file);
-    const data = JSON.parse(raw);
-    return data.projects || [];
+    if (!(await app.vault.adapter.exists(dataPath))) return [];
+    const data = JSON.parse(await app.vault.adapter.read(dataPath));
+    // Only live essays: not archived, and the essay file still exists.
+    return (data.projects || []).filter(
+      (p: CairnProject & { archived?: boolean }) =>
+        !p.archived && app.vault.getAbstractFileByPath(p.filePath) instanceof TFile
+    );
   } catch {
     return [];
   }
@@ -466,7 +496,8 @@ class SparkModal extends Modal {
     folderEl.setText(!folder || folder === "/" ? "vault root" : folder);
 
     contentEl.empty();
-    contentEl.setText(content);
+    // Show the idea, not its properties block.
+    contentEl.setText(content.replace(/^---\n[\s\S]*?\n---\n?/, "").trim());
   }
 
   private chooseSlotAndReplace(file: TFile) {
@@ -578,7 +609,7 @@ export default class FlintPlugin extends Plugin {
   async onload() {
     await this.loadSettings();
 
-    this.addRibbonIcon("flame", "Flint — Strike two ideas", () => {
+    this.addRibbonIcon("flame", "Flint — Strike two notes together", () => {
       this.openSpark();
     });
 
@@ -589,6 +620,306 @@ export default class FlintPlugin extends Plugin {
     });
 
     this.addSettingTab(new FlintSettingTab(this.app, this));
+
+    // ── Distill ──
+    this.addRibbonIcon("sparkles", "Flint — Distill selection to a note", () => {
+      if (!this.distillFromAnywhere()) new Notice("Select a passage first, then Distill");
+    });
+
+    this.addCommand({
+      id: "distill-selection",
+      name: "Distill selection to a note",
+      checkCallback: (checking) => {
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        const hasEditorSel = !!view?.editor.getSelection().trim();
+        if (!hasEditorSel && !this.currentPdfSelection()) return false;
+        if (!checking) this.distillFromAnywhere();
+        return true;
+      },
+    });
+
+    this.addCommand({
+      id: "promote-to-thought",
+      name: "Promote this source note to a Thought",
+      editorCheckCallback: (checking, editor, view) => {
+        const found = this.sourceNoteAtCursor(editor);
+        if (!found || !view.file) return false;
+        if (!checking) this.promoteToThought(editor, view.file, found);
+        return true;
+      },
+    });
+
+    // Remember the last text selected inside a PDF, so Distill still works
+    // after a click (ribbon / hotkey) moves focus away from the PDF.
+    this.registerDomEvent(document, "selectionchange", () => {
+      const pdf = readPdfSelection(this.app);
+      if (pdf) this.lastPdfSelection = { ...pdf, at: Date.now() };
+    });
+
+    this.registerEvent(
+      this.app.workspace.on("editor-menu", (menu: Menu, editor: Editor, view) => {
+        if (!(view instanceof MarkdownView) || !view.file) return;
+        const file = view.file;
+        if (editor.getSelection().trim()) {
+          menu.addItem((item) =>
+            item
+              .setTitle("Distill to a note")
+              .setIcon("sparkles")
+              .onClick(() => this.distillFromEditor(editor, file))
+          );
+        }
+        const found = this.sourceNoteAtCursor(editor);
+        if (found) {
+          menu.addItem((item) =>
+            item
+              .setTitle("Promote to Thought")
+              .setIcon("arrow-up-right")
+              .onClick(() => this.promoteToThought(editor, file, found))
+          );
+        }
+      })
+    );
+
+    if (!this.settings.distillMigrated) await this.migrateDistillSettings();
+  }
+
+  // ── Distill ───────────────────────────────────────────────
+
+  lastPdfSelection: (PdfSelection & { at: number }) | null = null;
+
+  /** Live PDF selection, or one made in the last two minutes. */
+  currentPdfSelection(): PdfSelection | null {
+    const live = readPdfSelection(this.app);
+    if (live) return live;
+    const last = this.lastPdfSelection;
+    return last && Date.now() - last.at < 2 * 60 * 1000 ? last : null;
+  }
+
+  /** Distill whatever is selected: the active editor first, then a PDF. */
+  distillFromAnywhere(): boolean {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (view?.file && view.editor.getSelection().trim()) {
+      this.distillFromEditor(view.editor, view.file);
+      return true;
+    }
+    const pdf = this.currentPdfSelection();
+    if (pdf) {
+      this.openDistill({ quote: pdf.text, source: pdf.file, pdf });
+      return true;
+    }
+    return false;
+  }
+
+  async distillFromEditor(editor: Editor, file: TFile) {
+    const quote = cleanEditorSelection(editor.getSelection());
+    if (quote) await this.openDistill({ quote, source: file });
+  }
+
+  /**
+   * Open the Distill window for a passage. `source` is the note or PDF it
+   * came from; for a PDF, its companion note (the note that links to it)
+   * supplies the author and receives source notes and backlinks.
+   */
+  async openDistill(opts: {
+    quote: string;
+    source: TFile;
+    pdf?: PdfSelection;
+    prefillIdea?: string;
+    onSaved?: (file: TFile) => void;
+    skipSourceBacklink?: boolean;
+  }) {
+    const { source, pdf } = opts;
+    const isPdf = source.extension === "pdf";
+    const sourceNote = isPdf ? findCompanionNote(this.app, source) : source;
+    const content = sourceNote ? await this.app.vault.read(sourceNote) : "";
+    const meta = sourceNote
+      ? noteMetadata(this.app, sourceNote, content)
+      : { title: "", author: "", url: "" };
+    if (!meta.title) meta.title = (sourceNote ?? source).basename;
+
+    let quote = opts.quote;
+    let refLink = "";
+    if (isPdf) {
+      const label = pdf?.pageLabel || (pdf?.page ? String(pdf.page) : "");
+      refLink = pdf?.page ? `[[${source.path}#page=${pdf.page}|p.${label}]]` : `[[${source.path}]]`;
+    } else {
+      const match = findMatchingHighlight(quote, content);
+      if (match) {
+        quote = match.cleanText;
+        refLink = match.linkMarkdown;
+      }
+    }
+
+    const projects = this.settings.showEssayProjects ? await getCairnProjects(this.app) : [];
+
+    new DistillModal(
+      this.app,
+      {
+        quote,
+        sourceLabel: meta.author ? `${meta.title} by ${meta.author}` : meta.title,
+        canSaveToSource: !!sourceNote || isPdf,
+        defaultFolder: this.settings.distillFolder || this.settings.outputFolder,
+        defaultSaveAs: this.settings.distillSaveAs,
+        strikeDefault: this.settings.strikeAfterDistill,
+        projects: projects.map((p) => ({ id: p.id, name: p.name })),
+        prefillIdea: opts.prefillIdea,
+      },
+      (onChoose) => new NotePickerModal(this.app, this.settings.distillFolder || this.settings.sourceFolder, onChoose).open(),
+      async (result) => {
+        this.lastPdfSelection = null; // a used selection must not come back on the next click
+        if (result.saveAs === "source") {
+          await this.saveSourceNote(result, quote, refLink, source, sourceNote);
+        } else {
+          const file = await this.saveThought(
+            result, quote, refLink, meta.author, source,
+            opts.skipSourceBacklink ? null : sourceNote, projects, sourceNote
+          );
+          if (file) opts.onSaved?.(file);
+        }
+      }
+    ).open();
+  }
+
+  async saveThought(
+    r: DistillResult,
+    quote: string,
+    refLink: string,
+    author: string,
+    source: TFile,
+    backlinkTo: TFile | null,
+    projects: CairnProject[],
+    sourceNote: TFile | null = backlinkTo
+  ): Promise<TFile | null> {
+    const name = sanitizeFilename(r.title);
+    if (!name) {
+      new Notice("Note title cannot be empty");
+      return null;
+    }
+    const path = r.folder ? `${r.folder}/${name}.md` : `${name}.md`;
+    if (this.app.vault.getAbstractFileByPath(path)) {
+      new Notice(`"${path}" already exists`);
+      return null;
+    }
+
+    const lines = ["---", `type: ${r.type}`];
+    if (author && (r.type === "quote" || r.type === "concept")) {
+      lines.push(`author: "${author.replace(/"/g, "'")}"`);
+    }
+    lines.push("---", "");
+    if (r.idea.trim()) lines.push(r.idea.trim(), "");
+    if (r.connectTo) {
+      const how = r.relationLine ? `: ${r.relationLine}` : "";
+      lines.push("## Links", "", `- ${r.relation} [[${r.connectTo.basename}]]${how}`, "");
+    }
+    lines.push("## Reference", "", `> ${quote}`, "");
+    lines.push(sourceNote ? `- Source: [[${sourceNote.basename}]]` : `- Source: [[${source.path}]]`);
+    if (author) lines.push(`- Author: ${author}`);
+    if (refLink) lines.push(`- ${refLink}`);
+    lines.push("");
+
+    const file = await this.app.vault.create(path, lines.join("\n"));
+
+    if (r.connectTo) {
+      const how = r.relationLine ? `: ${r.relationLine}` : "";
+      await this.app.vault.process(r.connectTo, (c) =>
+        appendUnderHeading(c, "Links", [`- ${INVERSE[r.relation]} [[${name}]]${how}`])
+      );
+    }
+    if (this.settings.distillBacklinkToSource && backlinkTo) {
+      await this.app.vault.process(backlinkTo, (c) => appendUnderHeading(c, "Notes", [`- [[${name}]]`]));
+    }
+    for (const id of r.projectIds) {
+      const proj = projects.find((p) => p.id === id);
+      if (proj) await this.addToEssay(file, proj);
+    }
+
+    this.settings.strikeAfterDistill = r.strike;
+    await this.saveSettings();
+    new Notice(`Created "${name}"`);
+    if (r.strike) this.openSpark(file);
+    return file;
+  }
+
+  /** The literature-note stage: a short own-words note kept on the source. */
+  async saveSourceNote(
+    r: DistillResult,
+    quote: string,
+    refLink: string,
+    source: TFile,
+    sourceNote: TFile | null
+  ) {
+    let target = sourceNote;
+    if (!target) {
+      // A PDF with no notes file yet: make one beside it that links to it.
+      const folder = source.parent?.path && source.parent.path !== "/" ? source.parent.path + "/" : "";
+      const path = `${folder}${source.basename} - notes.md`;
+      const existing = this.app.vault.getAbstractFileByPath(path);
+      target =
+        existing instanceof TFile
+          ? existing
+          : await this.app.vault.create(path, `PDF: [[${source.path}]]\n\n## Notes\n`);
+    }
+    const ref = refLink ? ` — ${refLink}` : "";
+    await this.app.vault.process(target, (c) =>
+      appendUnderHeading(c, "Notes", [`- ${r.idea.trim().replace(/\n+/g, " ")}${ref}`, `\t> ${quote}`])
+    );
+    new Notice(`Added to ${target.basename}`);
+  }
+
+  /** A `- note` line inside a `## Notes` section, plus its nested `> quote`. */
+  sourceNoteAtCursor(editor: Editor): { line: number; idea: string; quote: string } | null {
+    const lineNo = editor.getCursor().line;
+    const text = editor.getLine(lineNo);
+    if (!/^- /.test(text) || text.includes(" → [[")) return null; // already promoted
+    // Must sit under a "## Notes" heading
+    let underNotes = false;
+    for (let i = lineNo - 1; i >= 0; i--) {
+      const l = editor.getLine(i);
+      if (/^#{1,6} /.test(l)) {
+        underNotes = l.trim() === "## Notes";
+        break;
+      }
+    }
+    if (!underNotes) return null;
+    const idea = text.replace(/^- /, "").replace(/\s+—\s+(\[\[.*\]\]|\[.*\]\(.*\))\s*$/, "").trim();
+    if (!idea || /^\[\[[^\]]+\]\]$/.test(idea) || idea.includes("→ [[")) return null;
+    const next = lineNo + 1 < editor.lineCount() ? editor.getLine(lineNo + 1) : "";
+    const quote = /^\s+>\s?/.test(next) ? next.replace(/^\s+>\s?/, "").trim() : "";
+    return { line: lineNo, idea, quote };
+  }
+
+  async promoteToThought(editor: Editor, file: TFile, found: { line: number; idea: string; quote: string }) {
+    const pdfLink = editor.getLine(found.line).match(/\[\[([^\]|#]+\.pdf)[^\]]*\]\]/);
+    const pdf = pdfLink ? this.app.metadataCache.getFirstLinkpathDest(pdfLink[1], file.path) : null;
+    const pageMatch = editor.getLine(found.line).match(/#page=(\d+)[^|\]]*\|p\.([^\]]+)\]\]/);
+    await this.openDistill({
+      quote: found.quote || found.idea,
+      source: pdf ?? file,
+      pdf: pdf && pageMatch ? { text: found.quote, file: pdf, page: Number(pageMatch[1]), pageLabel: pageMatch[2] } : undefined,
+      prefillIdea: found.idea,
+      skipSourceBacklink: true,
+      onSaved: (thought) => {
+        const line = editor.getLine(found.line);
+        editor.setLine(found.line, `${line} → [[${thought.basename}]]`);
+      },
+    });
+  }
+
+  /** One-time: carry Distill settings over from Cairn/Throughline. */
+  async migrateDistillSettings() {
+    const dataPath = `${this.app.vault.configDir}/plugins/note-assembler/data.json`;
+    try {
+      if (await this.app.vault.adapter.exists(dataPath)) {
+        const old = JSON.parse(await this.app.vault.adapter.read(dataPath))?.settings ?? {};
+        if (old.distillDefaultFolder) this.settings.distillFolder = old.distillDefaultFolder;
+        if (typeof old.addBacklinkToSource === "boolean") this.settings.distillBacklinkToSource = old.addBacklinkToSource;
+        if (typeof old.strikeAfterDistill === "boolean") this.settings.strikeAfterDistill = old.strikeAfterDistill;
+      }
+    } catch {
+      // Nothing to migrate; defaults stand.
+    }
+    this.settings.distillMigrated = true;
+    await this.saveSettings();
   }
 
   /** Open Flint. Pass a note to strike it against a random (lonely) note. */
@@ -730,6 +1061,8 @@ export default class FlintPlugin extends Plugin {
       `^#\\s+${sparkFile.basename.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\n?`
     );
     sparkContent = sparkContent.replace(headingPattern, "").trim();
+    // Distilled notes carry their source under "## Reference"; the essay gets the idea.
+    sparkContent = sparkContent.replace(/(^|\n)## (Links|Reference)[\s\S]*$/, "").trim();
 
     const projectContent = await this.app.vault.read(projectFile);
     const quoted = sparkContent.split("\n").map((l: string) => `> ${l}`).join("\n");

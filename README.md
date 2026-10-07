@@ -1,6 +1,8 @@
-# Flint — Idea Spark
+# Flint
 
-Strike two notes together. Write what the collision reveals.
+A Zettelkasten companion: distill sources into atomic notes, link them on purpose, and spark new ideas from collisions.
+
+Flint does two things. **Distill** turns something you read into a note in your own words. **Strike** puts two of your notes side by side so you can write the idea neither one contains alone.
 
 ![Flint modal showing two notes side by side with a writing area below](screenshot.png)
 
@@ -10,7 +12,20 @@ Sometimes nothing. Skip, shuffle, try again. But sometimes two notes that have n
 
 This is basically the first thing I've ever coded. It's simple and it's fun and I use it all the time.
 
-## How it works
+## Distill: from a passage to your own note
+
+![The Distill window: the passage pinned at the top, your idea and title below](distill-screenshot.png)
+
+1. **Select a passage** in any note (Readwise highlights, web clippings, PDF++ quotes) or right inside a PDF
+2. **Distill it** with the ✨ ribbon icon, the right-click menu, or the command `Flint: Distill selection to a note`
+3. **Write what it means to you.** The passage stays pinned at the top while you write
+4. **Pick a type** (claim, concept, quote, anecdote) and give it a title, ideally your idea as one full sentence
+5. **Connect it on purpose** with "Connects to…": pick the note this one continues, contradicts or refines, and say how in a line. Both notes get linked
+6. **Save** as its own note, or **as a note on the source** if it's not a full idea yet. Notes on a source can be promoted later: right-click the line → **Promote to Thought**
+
+Distilled notes keep the quote, the source, the author and a link back to the exact spot (a Readwise highlight or the PDF page). Tick "Then strike it" and Flint opens with your new note paired against a lonely one.
+
+## Strike: two notes, one new idea
 
 1. **Open Flint** — Command palette (`Flint: Strike two notes`) or the flame icon in the ribbon
 2. **Read the pair** — Two random notes side by side
@@ -21,6 +36,12 @@ This is basically the first thing I've ever coded. It's simple and it's fun and 
 Saved sparks look like this:
 
 ```markdown
+---
+type: claim
+origin: flint
+created: 2026-10-07
+---
+
 Your original idea goes here.
 
 ---
@@ -33,7 +54,7 @@ Your original idea goes here.
 
 ## The orphan thing
 
-Flint can weight its randomness toward notes with fewer connections — the ones you haven't linked to much, the ones gathering dust. Turns out those are often the most surprising ones to collide. Your most neglected notes might be your best material. Toggle this in settings.
+Flint can weight its randomness toward notes with fewer connections (links in or out) — the ones you haven't linked to much, the ones gathering dust. Turns out those are often the most surprising ones to collide. Your most neglected notes might be your best material. Toggle this in settings.
 
 ## Other details
 
@@ -60,7 +81,9 @@ Flint can weight its randomness toward notes with fewer connections — the ones
 
 ## Why "Flint"?
 
-Sister plugin to [Cairn](https://github.com/MaggieMcgu/obsidian-cairn), an essay composer — that one's the more complicated work-in-progress. Both are rocks. Cairn stacks notes into structure. Flint strikes them together to see what catches fire.
+Sister plugin to [Throughline](https://github.com/MaggieMcgu/obsidian-note-assembler), an essay composer. Flint makes the ideas; Throughline arranges them into an essay. If Throughline is installed, Distill and Strike can drop a new note straight into one of your essays.
+
+Flint strikes notes together to see what catches fire.
 
 I'd love to hear how you use it, what's broken, or what would make it better. Open an [issue](https://github.com/MaggieMcgu/obsidian-flint/issues) or find me at [moabsunnews.com](https://moabsunnews.com).
 

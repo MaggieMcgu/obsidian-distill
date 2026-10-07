@@ -1,7 +1,7 @@
 {
   "name": "flint",
-  "version": "0.1.0",
-  "description": "Strike two notes together to spark a third — random juxtaposition for idea generation",
+  "version": "0.2.0",
+  "description": "Strike two notes together to spark a third \u2014 random juxtaposition for idea generation",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",

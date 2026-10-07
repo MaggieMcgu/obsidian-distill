@@ -1,9 +1,9 @@
 {
   "id": "flint",
-  "name": "Flint — Idea Spark",
-  "version": "0.1.0",
-  "minAppVersion": "0.15.0",
-  "description": "Place two random notes side by side. Write the idea that neither one contains alone.",
+  "name": "Flint",
+  "version": "0.2.0",
+  "minAppVersion": "1.7.2",
+  "description": "A Zettelkasten companion: distill sources into atomic notes, link them on purpose, and spark new ideas from collisions.",
   "author": "Maggie McGuire",
   "authorUrl": "https://moabsunnews.com",
   "fundingUrl": "https://venmo.com/KiKiBouba",
